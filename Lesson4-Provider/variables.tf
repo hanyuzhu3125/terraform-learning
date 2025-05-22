@@ -5,13 +5,13 @@ variable "region" {
 }
 
 variable "project_name" {
-  description = "Project (and EKS cluster) name"
+  description = "Project (EKS cluster) name"
   type        = string
   default     = "terraform-training-lesson4"
 }
 
 variable "cluster_version" {
-  description = "Kubernetes version"
+  description = "Kubernetes version (minor only, e.g. 1.29)"
   type        = string
   default     = "1.29"
 }
@@ -49,7 +49,7 @@ variable "vpc_cidr" {
 variable "private_subnet_cidrs" {
   description = "List of private subnet CIDRs"
   type        = list(string)
-  default     = [
+  default = [
     "10.0.0.0/19",
     "10.0.32.0/19",
     "10.0.64.0/19"
@@ -59,9 +59,15 @@ variable "private_subnet_cidrs" {
 variable "public_subnet_cidrs" {
   description = "List of public subnet CIDRs"
   type        = list(string)
-  default     = [
+  default = [
     "10.0.96.0/19",
     "10.0.128.0/19",
     "10.0.160.0/19"
   ]
+}
+
+variable "cluster_endpoint_public_access_cidrs" {
+  description = "CIDR(s) allowed to reach the EKS API"
+  type        = list(string)
+  default     = ["0.0.0.0/0"]
 }
