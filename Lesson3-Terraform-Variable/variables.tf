@@ -12,7 +12,7 @@ variable "aws_secret_key" {
 variable "project_name" {
   description = "Prefix for all resource names"
   type        = string
-  default     = "terraform-training"
+  default     = "terraform-training-lesson3"
 }
 
 variable "aws_region" {
