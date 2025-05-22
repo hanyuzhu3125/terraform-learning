@@ -1,3 +1,14 @@
+variable "aws_access_key" {
+  description = "AWS access key ID"
+  type        = string
+}
+
+variable "aws_secret_key" {
+  description = "AWS secret access key"
+  type        = string
+  sensitive   = true          # `terraform plan` で平文反映を防止
+}
+
 variable "project_name" {
   description = "Prefix for all resource names"
   type        = string

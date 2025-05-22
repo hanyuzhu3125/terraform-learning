@@ -1,122 +1,91 @@
-# Terraform基本概念
+# Terraformの基礎
 
-## 1.**module とは何か？**
+## Terraformとは
 
-モジュールは、再利用可能な Terraform コードのパッケージです。
+TerraformはHashiCorp社が開発したオープンソースのインフラストラクチャ自動化ツールです。インフラストラクチャをコード（IaC: Infrastructure as Code）として記述することで、クラウド環境やオンプレミス環境のリソースを効率的に管理・構築できます。
 
-**`modules/nginx`**が関数のように用意されており、それを各環境から使用する形になります。
+## Terraformの基本概念
 
-今回の例では **`test`** という環境から **`nginx`** の module を使う形になっております。
+### **Configuration Language**
 
-※**`environments`**や**`modules`**,**`test`** というフォルダの文字列は著者が自由に付けた名前であり、制約はありません。
+- **HCL (HashiCorp Configuration Language)** を採用。JSON 互換だが、人が読み書きしやすい宣言型シンタックス。
+- **resource / data / variable / output / locals / terraform** などのブロックで構成。
+- **依存関係** は変数参照（`aws_instance.web.id` のような階層参照）で暗黙的に解決され、DAG を自動生成。
+- **ループ・条件分岐** には `for` 式、`for_each`、`count`、`dynamic` ブロック、`if` 式が利用可能。
 
-モジュールの特徴には下記のようなものがあります。
+### Commands
 
-- **コードの再利用性の向上**
-- **設定の抽象化**
-- **環境間での一貫性の確保**
-- **変更の影響範囲の制御**
+| よく使うコマンド | 目的（要点） |
+| --- | --- |
+| `terraform init` | プロバイダー DLL の取得、バックエンド初期化 |
+| `terraform validate` | HCL 構文チェック |
+| `terraform plan` | 変更点を差分表示（実行はしない） |
+| `terraform apply` | 変更を実際に適用（`-auto-approve` で非対話化） |
+| `terraform destroy` | 管理対象を削除 |
+| `terraform fmt` | コードを HCL スタイルに自動整形 |
+| `terraform taint` / `untaint` | リソースを再作成候補に指定／解除 |
+| `terraform state` subcommands | state ファイルの詳細操作（mv, rm, list など） |
 
-モジュールの構成要素は簡単に、以下のようになっております。
+### Providers
 
-- **`source`: モジュールのソースパス**
-- **入力変数: モジュールに渡す変数**
+- **クラウド・SaaS の API を抽象化** したプラグイン。例：`aws`, `azurerm`, `google`, `kubernetes`, `cloudflare` など。
+- `required_providers` ブロックでバージョン管理。`terraform init` 時に自動ダウンロード。
+- **マルチプロバイダー**：`alias` を指定し、複数アカウント／リージョンを同時に操作可能。
 
-**`source`** で指定されたソースに記載されているリソースが構築できる形になります。
+### State
 
-## **2. Variables, Locals（変数）とは何か？**
+- **desired state（HCL）** と **actual state（remote の実リソース）** の橋渡しをするメタデータ。
+- `.tfstate` ファイルに JSON 形式で保存され、毎回差分比較して idempotent に適用。
+- 機密情報も含むため、**アクセス制御** と **バージョン管理** が重要。
 
-Terraform では、変数を使用して設定を再利用可能にし、環境ごとの違いを管理します。
+### Backends
 
-### **Variables（変数）**
+- **state の保存場所とロック方法** を定義。デフォルトはローカルファイル。
+- 代表例：`s3` (+ DynamoDB ロック), `azurerm`, `gcs`, `remote` (Terraform Cloud/Terraform Enterprise), `consul`, `http`。
+- チーム開発では **リモートバックエンド** ＋ **ロック機構** が必須。
 
-変数は **`variable`** ブロックで定義します。
+### Provisioners
 
-**`modules/nginx/variable.tf`** を参照してください。
+- **リソース作成後・破棄前に OS 内部でコマンド実行**。
+- 代表例：`remote-exec`, `local-exec`, `file`。
+- **運用上の注意**：失敗で apply 全体が abort／再試行困難、idempotency 低下。構成管理ツール（Ansible など）へ委譲するのが推奨ベストプラクティス。
 
-- `description`: 変数の説明文
-- `type`: 変数の型（string、number、bool など）
-- `default`: デフォルト値（任意）
+### Modules
 
-**`environments/xxx/variable.tf`**を参照してください。
+- **再利用可能な論理単位** をカプセル化。VPC、EKS クラスターなどのベストプラクティスを部品化。
+- `source` に Git / Registry / ローカルパスを指定。変数でカスタマイズし、`outputs` で外部へ値を公開。
+- **公式 Terraform Registry** にコミュニティ・認定モジュールが多数公開。
+- **階層構造** をとれるため、大規模環境では “root module” + “child modules” として整理すると可読性とメンテ性が向上。
 
-ここで**`nginx`**の module で定義された変数に具体的な値を代入します。
+## TerraformとAnsible、CHEFの区別
 
-これらの変数を環境毎に変えることにより、具体的な成果物が環境毎に変わるようになります。
+### 目的と得意領域
 
-### **Locals（ローカル変数）**
+| ツール | 何を自動化するか | 主な対象 | 典型的なユースケース |
+| --- | --- | --- | --- |
+| **Terraform** | インフラの作成・破棄（IaC ＝ Infrastructure as Code） | パブリック／プライベートクラウド、SaaS、ネットワーク | VPC・サブネット・ロードバランサ―の新規構築、マルチクラウド環境のブループリント作成 ([HashiCorp Developer](https://developer.hashicorp.com/terraform/intro/vs/chef-puppet?utm_source=chatgpt.com)) |
+| **Ansible** | サーバー／ネットワーク機器の構成変更・アプリ導入・運用タスク | OS 設定、パッケージ、サービス、ユーザー、ACL など | OS Harden、Nginx などのアプリインストール、ローリングアップデート  |
+| **Chef (Chef Infra)** | 複雑・大規模な構成管理をポリシーベースで継続適用 | サーバー群（オンプレ・クラウド） | 数千台規模のノードを一貫して構成し続ける、ポリシーガバナンス |
 
-ローカル値は、複雑な式や計算結果を再利用可能な形で保存します。
+### アーキテクチャと実行モデル
 
-**`modules/nginx/local.tf`** を参照してください。
+| 観点 | Terraform | Ansible | Chef |
+| --- | --- | --- | --- |
+| **宣言／命令** | 完全宣言的（HCL） | YAML で宣言的だが逐次実行手順を記述 | Ruby DSL 宣言的（レシピ／リソース） |
+| **ステート保持** | *tfstate* をローカルまたはリモートで保持し「理想状態」を追跡 | ステートを持たず都度ホストに対し idempotent 実行 | Chef Server が望ましい状態を保持、各ノードが Pull |
+| **接続方式** | API 呼び出しのみ（エージェント不要） | SSH／WinRM（完全エージェントレス） | エージェント（chef-client）常駐 |
+| **プッシュ／プル** | プッシュ（CLI からプロバイダー API へ） | プッシュ（制御端から対象へ） | プル（ノードが定期的にサーバーへ） |
+| **不変／可変** | 不変インフラ志向（リソース差分を計算し置換） | 可変インフラ＆運用タスクを柔軟に実行 | 可変インフラだがポリシーで継続ドリフト修正 |
 
-下記のように locals を定義します。
+### 選択の指針
 
-**`modules/nginx/nginx.tf`** を参照してください。
-
-このようにしてローカル変数を使うことが可能です。
-
-## **3. データ型について**
-
-Terraform の主要なデータ型は以下の通りです。
-
-- **基本型**
-    - `string`: 文字列型
-    - `number`: 数値型
-    - `bool`: 真偽値型
-- **複合型**
-    - `list`: 順序付きリスト型
-    - `map`: キーと値のペア型
-    - `object`: 異なる型を持つ名前付き属性の集合型
-
-例えば今回の **`environment`**, ** `container_ports`** 変数は string 型や　object 型を使っております。
-
-## **4. terraform ブロックとは何か？**
-
-**`terraform`** ブロックは、Terraform 自体の設定を定義するブロックです。
-
-**`modules/nginx/provider.tf`** を参照してください。
-
-主な設定項目は以下になります。
-
-- **`required_providers`**: 必要なプロバイダーとバージョンの指定
-- **`required_version`**: 必要な Terraform のバージョン指定
-- **`backend`**: 状態ファイルの保存場所の設定
-
-今回の設定では **`required_providers`** のみ設定されております。
-
-## **5. provider ブロックとは何か？**
-
-プロバイダーブロックは、特定のインフラストラクチャプラットフォームとの連携方法を定義します。
-
-**`modules/nginx/provider.tf`** を参照してください。
-
-主な役割は以下になります。
-
-- プロバイダー固有の設定定義
-- 認証情報の設定
-- 接続先エンドポイントの指定
-
-## **6. resource ブロックとは何か？**
-
-リソースブロックは、実際のインフラストラクチャコンポーネントを定義します。
-
-今回の構成要素は以下になります。
-
-- リソースタイプ（例：**`docker_container`** ）
-- リソース名（例：**`nginx`** ）
-
-resource ブロックにはそれぞれ固有のフィールドがあり、それぞれ自分で設定した値を埋めることで必要な形式のリソースを構築することが可能です。
-
-例えば **`docker_container`** の resource block は以下になります。
-
-## **7. resource の参照とは何か？**
-
-リソース間の依存関係を表現するために、他のリソースを参照する方法です
-
-**`modules/nginx/nginx.tf`** を参照してください。
-
-参照の書き方は以下のようになります。
-
-- **`<リソースタイプ>.<リソース名>.<属性>`**
-- 例：**`docker_image.nginx.image_id`**
+- **まず基盤を作るなら Terraform**
+    - 新規 VPC、EKS クラスタ、RDS など「まだ存在しないリソース」を宣言的に構築。
+    - 状態ファイルにより差分適用が明確。
+- **できあがったサーバーを設定・更新するなら Ansible**
+    - OS チューニング、アプリ導入、証明書更新など細かな運用フローをエージェントレスで即時プッシュ。
+- **数百～数千台を長期にわたり一貫運用するなら Chef**
+    - ポリシーを Chef Server で集中管理し、ノードが定期的に自己修復。
+    - 依存解決や複雑なクックブック（Ruby DSL）で高度カスタムが可能。
+- **組み合わせパターンが実践的**
+    - Terraform で VM や Kubernetes ノードを作成 → Ansible で初期設定 → Chef または Ansible Tower/AWX で継続運用、という「レイヤ分け」が現場でよく採用されます。
